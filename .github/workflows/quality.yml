@@ -1,0 +1,87 @@
+name: Quality checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check JavaScript syntax
+        run: node --check assets/app.js
+
+      - name: Validate static files and HTML references
+        run: |
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          from collections import Counter
+          from urllib.parse import urlparse
+
+          root = Path('.')
+          html = Path('index.html').read_text(encoding='utf-8')
+
+          class Audit(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.ids = []
+                  self.hrefs = []
+                  self.sources = []
+                  self.images_without_alt = []
+              def handle_starttag(self, tag, attrs):
+                  data = dict(attrs)
+                  if data.get('id'):
+                      self.ids.append(data['id'])
+                  if data.get('href'):
+                      self.hrefs.append(data['href'])
+                  if data.get('src'):
+                      self.sources.append(data['src'])
+                  if tag == 'img' and 'alt' not in data:
+                      self.images_without_alt.append(data.get('src', '<unknown>'))
+
+          audit = Audit()
+          audit.feed(html)
+
+          duplicates = [key for key, count in Counter(audit.ids).items() if count > 1]
+          assert not duplicates, f'Duplicate IDs: {duplicates}'
+          assert not audit.images_without_alt, f'Images without alt: {audit.images_without_alt}'
+          assert 'noindex,nofollow,noarchive' in html
+          assert 'Демонстрационный концепт редизайна' in html
+          assert 'tel:+79036472592' in html
+
+          ids = set(audit.ids)
+          missing_fragments = [href for href in audit.hrefs if href.startswith('#') and href[1:] not in ids]
+          assert not missing_fragments, f'Missing anchors: {missing_fragments}'
+
+          local_paths = []
+          for ref in audit.sources:
+              parsed = urlparse(ref)
+              if not parsed.scheme and not ref.startswith('//'):
+                  local_paths.append(parsed.path)
+          missing_files = [path for path in local_paths if path and not (root / path).is_file()]
+          assert not missing_files, f'Missing local files: {missing_files}'
+
+          for required in ['index.html', 'assets/styles.css', 'assets/app.js', 'robots.txt', '.nojekyll', '404.html']:
+              assert (root / required).exists(), f'Missing required file: {required}'
+
+          print(f'HTML OK: {len(audit.ids)} IDs, {len(audit.hrefs)} links, {len(local_paths)} local assets')
+          PY
+
+      - name: Smoke-test static server
+        run: |
+          python3 -m http.server 4173 >/tmp/bezvmyatin-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill $server_pid' EXIT
+          sleep 1
+          curl --fail --silent --show-error http://127.0.0.1:4173/index.html >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:4173/assets/styles.css >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:4173/assets/app.js >/dev/null
