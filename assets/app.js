@@ -106,10 +106,9 @@ function renderFiles() {
 
 fileInput?.addEventListener('change', () => {
   const incoming = [...fileInput.files].filter((file) => file.type.startsWith('image/'));
+  const total = selectedFiles.length + incoming.length;
   selectedFiles = [...selectedFiles, ...incoming].slice(0, 4);
-  if (incoming.length + selectedFiles.length > 4) {
-    showToast('Можно выбрать не более четырёх фотографий.');
-  }
+  if (total > 4) showToast('Можно выбрать не более четырёх фотографий.');
   fileInput.value = '';
   renderFiles();
 });
