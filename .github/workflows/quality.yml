@@ -91,7 +91,7 @@ jobs:
       - name: Record successful validation
         if: github.event_name == 'push'
         run: |
-          cat > QUALITY_STATUS.md <<EOF
+          cat > QUALITY_STATUS.md <<'EOF'
           # Quality status
 
           - Result: **passed**
