@@ -1,10 +1,10 @@
 name: Rebuild anti-vibecode project
 
 on:
-  push:
+  pull_request:
+    branches: [main]
     paths:
-      - '.github/workflows/rebuild.yml'
-      - '.bootstrap/**'
+      - '.rebuild-trigger'
   workflow_dispatch:
 
 permissions:
@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   rebuild:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +23,14 @@ jobs:
           node-version: 22
       - name: Replace legacy project with the verified source tree
         run: node .bootstrap/rebuild.mjs
-      - name: Commit rebuilt project
+      - name: Validate rebuilt project
+        run: |
+          npm install
+          npm run lint
+          npm run typecheck
+          npm run test
+          npm run build
+      - name: Commit rebuilt project to main
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
