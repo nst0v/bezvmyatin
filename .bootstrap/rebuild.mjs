@@ -21,3 +21,4 @@ for (const entry of readdirSync(root)) {
 execFileSync('tar', ['-xzf', archive, '-C', root], { stdio: 'inherit' });
 rmSync(archive, { force: true });
 console.log('Project rebuilt from the verified anti-vibecode payload.');
+// This file is removed by the rebuild itself. The touch below exists only to trigger the one-time job.
